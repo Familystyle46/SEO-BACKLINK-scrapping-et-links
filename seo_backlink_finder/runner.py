@@ -45,6 +45,7 @@ def run_scan(config: dict, sources: list[str] | None = None,
         raise ValueError("Aucun mot-clé configuré. Ajoutez des mots-clés dans la config ou via --keywords.")
 
     all_opportunities: list[BacklinkOpportunity] = []
+    interrupted = False
 
     # Exécuter chaque scraper
     for source_name in sources:
@@ -60,15 +61,25 @@ def run_scan(config: dict, sources: list[str] | None = None,
             opportunities = scraper.find_opportunities(keywords)
             logger.info(f"  {source_name}: {len(opportunities)} opportunités trouvées")
             all_opportunities.extend(opportunities)
+        except KeyboardInterrupt:
+            logger.warning(f"  Interruption pendant {source_name} - sauvegarde des résultats partiels...")
+            interrupted = True
+            break
         except Exception as e:
             logger.error(f"  Erreur sur {source_name}: {e}")
 
-    # Scoring et déduplication
-    logger.info("=== Analyse et scoring ===")
+    # Scoring et déduplication (même partiels)
+    if interrupted:
+        logger.info("=== Sauvegarde partielle des résultats ===")
+    else:
+        logger.info("=== Analyse et scoring ===")
+
     scorer = OpportunityScorer(config)
     all_opportunities = scorer.score_all(all_opportunities)
     all_opportunities = scorer.filter_duplicates(all_opportunities)
     summary = scorer.get_summary(all_opportunities)
+    if interrupted:
+        summary["interrupted"] = True
 
     # Export
     logger.info("=== Export des résultats ===")

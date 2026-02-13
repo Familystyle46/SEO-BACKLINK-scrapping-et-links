@@ -48,11 +48,21 @@ def cmd_scan(args):
         border_style="blue",
     ))
 
-    with console.status("[bold green]Scan en cours..."):
-        results = run_scan(config, sources=sources, keywords=keywords)
+    try:
+        with console.status("[bold green]Scan en cours..."):
+            results = run_scan(config, sources=sources, keywords=keywords)
+    except KeyboardInterrupt:
+        console.print("\n[bold yellow]Interruption - aucun résultat à sauvegarder.[/bold yellow]")
+        return
 
     # Afficher le résumé
     summary = results["summary"]
+    if summary.get("interrupted"):
+        console.print(Panel(
+            "[bold yellow]Scan interrompu par l'utilisateur (Ctrl+C)[/bold yellow]\n"
+            "Les résultats partiels ont été sauvegardés.",
+            border_style="yellow",
+        ))
     console.print()
     console.print(Panel(
         f"Total: [bold]{summary['total']}[/bold] opportunités\n"
