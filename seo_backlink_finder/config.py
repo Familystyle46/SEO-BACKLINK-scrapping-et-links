@@ -20,8 +20,11 @@ DEFAULT_CONFIG = {
         "country": "FR",
     },
     "search": {
-        "max_results_per_query": 50,
-        "delay_between_requests": 3,
+        "max_results_per_query": 30,
+        "delay_between_requests": 5,
+        "google_delay_min": 8,
+        "google_delay_max": 15,
+        "max_retries_on_429": 3,
         "request_timeout": 15,
         "max_pages_to_analyze": 5,
     },

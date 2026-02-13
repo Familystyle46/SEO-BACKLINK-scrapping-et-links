@@ -20,9 +20,14 @@ site:
 
 search:
   # Nombre max de résultats par requête Google
-  max_results_per_query: 50
-  # Délai entre les requêtes (secondes) - respecter les rate limits
-  delay_between_requests: 3
+  max_results_per_query: 30
+  # Délai entre les requêtes vers les sites analysés (secondes)
+  delay_between_requests: 5
+  # Délai min/max entre les requêtes Google (secondes, randomisé)
+  google_delay_min: 8
+  google_delay_max: 15
+  # Nombre max de retries en cas d'erreur 429 (rate-limit Google)
+  max_retries_on_429: 3
   # Timeout pour les requêtes HTTP (secondes)
   request_timeout: 15
   # Nombre max de pages à analyser par source trouvée

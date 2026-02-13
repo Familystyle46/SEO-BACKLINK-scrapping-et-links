@@ -1,6 +1,7 @@
 """Classe de base pour tous les scrapers."""
 
 import logging
+import random
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -52,9 +53,12 @@ class BaseScraper(ABC):
         self.config = config
         self.search_config = config.get("search", {})
         self.site_config = config.get("site", {})
-        self.delay = self.search_config.get("delay_between_requests", 3)
+        self.delay = self.search_config.get("delay_between_requests", 5)
         self.timeout = self.search_config.get("request_timeout", 15)
-        self.max_results = self.search_config.get("max_results_per_query", 50)
+        self.max_results = self.search_config.get("max_results_per_query", 30)
+        self.google_delay_min = self.search_config.get("google_delay_min", 8)
+        self.google_delay_max = self.search_config.get("google_delay_max", 15)
+        self.max_retries = self.search_config.get("max_retries_on_429", 3)
         self._ua = UserAgent(fallback="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         self.session = self._create_session()
 
@@ -74,6 +78,12 @@ class BaseScraper(ABC):
     def _respectful_delay(self):
         """Attend entre les requêtes pour ne pas surcharger les serveurs."""
         time.sleep(self.delay)
+
+    def _google_delay(self):
+        """Délai randomisé plus long entre les requêtes Google."""
+        delay = random.uniform(self.google_delay_min, self.google_delay_max)
+        logger.debug(f"Pause Google: {delay:.1f}s")
+        time.sleep(delay)
 
     def fetch_page(self, url: str) -> BeautifulSoup | None:
         """Récupère et parse une page web.
@@ -97,11 +107,13 @@ class BaseScraper(ABC):
     def search_google(self, query: str, num_results: int = 30) -> list[str]:
         """Effectue une recherche Google et retourne les URLs des résultats.
 
-        Utilise le scraping direct de Google Search.
+        Utilise le scraping direct de Google Search avec retry et backoff
+        exponentiel en cas de rate-limiting (429).
         """
         urls = []
         lang = self.site_config.get("language", "fr")
         country = self.site_config.get("country", "FR")
+        consecutive_429 = 0
 
         for start in range(0, min(num_results, self.max_results), 10):
             search_url = (
@@ -109,37 +121,74 @@ class BaseScraper(ABC):
                 f"?q={requests.utils.quote(query)}"
                 f"&hl={lang}&gl={country}&start={start}&num=10"
             )
-            try:
-                response = self.session.get(
-                    search_url,
-                    headers=self._get_headers(),
-                    timeout=self.timeout,
-                )
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, "lxml")
 
-                for link in soup.select("div.g a[href]"):
-                    href = link.get("href", "")
-                    if href.startswith("http") and "google.com" not in href:
-                        if href not in urls:
-                            urls.append(href)
+            success = False
+            for retry in range(self.max_retries + 1):
+                try:
+                    response = self.session.get(
+                        search_url,
+                        headers=self._get_headers(),
+                        timeout=self.timeout,
+                    )
 
-                # Fallback: chercher dans tous les liens
-                if not urls:
-                    for link in soup.find_all("a", href=True):
-                        href = link["href"]
-                        if href.startswith("/url?q="):
-                            clean = href.split("/url?q=")[1].split("&")[0]
-                            if clean.startswith("http") and "google.com" not in clean:
-                                if clean not in urls:
-                                    urls.append(clean)
+                    if response.status_code == 429:
+                        consecutive_429 += 1
+                        backoff = min(30 + (2 ** retry) * 15, 120)
+                        jitter = random.uniform(0, backoff * 0.3)
+                        wait = backoff + jitter
+                        logger.warning(
+                            f"Google 429 (tentative {retry + 1}/{self.max_retries + 1}) "
+                            f"- pause de {wait:.0f}s avant retry"
+                        )
+                        time.sleep(wait)
 
-                self._respectful_delay()
+                        if consecutive_429 >= 3:
+                            logger.warning(
+                                "Trop de 429 consécutifs - arrêt de cette recherche "
+                                "pour éviter un blocage prolongé"
+                            )
+                            return urls[:num_results]
+                        continue
 
-            except requests.RequestException as e:
-                logger.warning(f"Erreur recherche Google (start={start}): {e}")
-                self._respectful_delay()
-                continue
+                    response.raise_for_status()
+                    consecutive_429 = 0
+                    soup = BeautifulSoup(response.text, "lxml")
+
+                    for link in soup.select("div.g a[href]"):
+                        href = link.get("href", "")
+                        if href.startswith("http") and "google.com" not in href:
+                            if href not in urls:
+                                urls.append(href)
+
+                    # Fallback: chercher dans tous les liens
+                    if not urls:
+                        for link in soup.find_all("a", href=True):
+                            href = link["href"]
+                            if href.startswith("/url?q="):
+                                clean = href.split("/url?q=")[1].split("&")[0]
+                                if clean.startswith("http") and "google.com" not in clean:
+                                    if clean not in urls:
+                                        urls.append(clean)
+
+                    success = True
+                    break
+
+                except requests.RequestException as e:
+                    if retry < self.max_retries:
+                        backoff = (2 ** retry) * 10
+                        logger.warning(
+                            f"Erreur recherche Google (start={start}, "
+                            f"tentative {retry + 1}): {e} - retry dans {backoff}s"
+                        )
+                        time.sleep(backoff)
+                    else:
+                        logger.warning(
+                            f"Erreur recherche Google (start={start}): {e} "
+                            f"- abandon après {self.max_retries + 1} tentatives"
+                        )
+
+            if success:
+                self._google_delay()
 
             if len(urls) >= num_results:
                 break
