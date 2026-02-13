@@ -1,0 +1,46 @@
+# Configuration par défaut pour SEO Backlink Finder
+# Dupliquez ce fichier et modifiez-le pour chaque site
+
+site:
+  url: "https://pharmacie-provencale.com"
+  name: "Pharmacie Provençale"
+  keywords:
+    - "pharmacie en ligne"
+    - "parapharmacie"
+    - "médicaments sans ordonnance"
+    - "cosmétiques bio"
+    - "compléments alimentaires"
+    - "aromathérapie"
+    - "huiles essentielles"
+    - "santé naturelle"
+    - "produits pharmaceutiques"
+    - "bien-être santé"
+  language: "fr"
+  country: "FR"
+
+search:
+  # Nombre max de résultats par requête Google
+  max_results_per_query: 50
+  # Délai entre les requêtes (secondes) - respecter les rate limits
+  delay_between_requests: 3
+  # Timeout pour les requêtes HTTP (secondes)
+  request_timeout: 15
+  # Nombre max de pages à analyser par source trouvée
+  max_pages_to_analyze: 5
+
+scoring:
+  # Poids pour le scoring des opportunités (sur 100)
+  weights:
+    domain_authority: 25
+    relevance: 30
+    dofollow: 20
+    comment_open: 15
+    page_age: 10
+
+export:
+  # Formats de sortie disponibles: csv, json, html
+  formats:
+    - csv
+    - json
+    - html
+  output_dir: "output"

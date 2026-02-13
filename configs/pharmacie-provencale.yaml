@@ -1,0 +1,19 @@
+# Configuration pour pharmacie-provencale.com
+site:
+  url: "https://pharmacie-provencale.com"
+  name: "Pharmacie Provençale"
+  keywords:
+    - "pharmacie en ligne"
+    - "parapharmacie"
+    - "médicaments sans ordonnance"
+    - "cosmétiques bio pharmacie"
+    - "compléments alimentaires"
+    - "aromathérapie huiles essentielles"
+    - "santé naturelle"
+    - "produits bien-être"
+    - "dermocosmétique"
+    - "phytothérapie"
+    - "pharmacie provence"
+    - "soins visage corps"
+  language: "fr"
+  country: "FR"
